@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registro completado</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(15px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeIn { animation: fadeIn .45s ease-out; }
+  </style>
+</head>
+
+<body class="flex items-center justify-center min-h-screen">
+
+  <div class="bg-slate-800/80 backdrop-blur-lg p-8 rounded-2xl shadow-2xl w-full max-w-md animate-fadeIn border border-slate-700">
+    <div class="flex justify-center mb-4">
+      <div class="bg-green-600 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg shadow-green-900/40">
+        <span class="text-3xl">✔</span>
+      </div>
+    </div>
+
+    <h1 class="text-3xl font-bold text-white text-center mb-4">¡Registro completado!</h1>
+    <p class="text-center text-slate-300 mb-6">Tu usuario ha sido registrado correctamente.</p>
+
+    <div class="bg-slate-900/70 border border-slate-700 rounded-xl p-5 shadow-lg mb-6">
+      <p class="text-slate-300 mb-2"><strong class="text-white">Usuario:</strong> {{ usuario.nombre }}</p>
+      <p class="text-slate-300"><strong class="text-white">Creado en:</strong> {{ usuario.creado_en }}</p>
+    </div>
+
+    <div class="text-center">
+      <a href="/" class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-semibold transition active:scale-95 shadow">
+        Volver al inicio
+      </a>
+    </div>
+  </div>
+
+</body>
+</html>

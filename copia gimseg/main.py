@@ -1983,4 +1983,19 @@ def borrar_usuario(user_id: int):
     guardar_estado_dia(estado)
 
     print(f"[INFO] Usuario {user_id} y todos sus datos han sido eliminados.")
+
     return RedirectResponse("/", status_code=303)
+
+if __name__ == "__main__":
+    import uvicorn
+    import os
+
+    # Render define PORT, tu PC no
+    port = int(os.getenv("PORT", 8000))
+
+    # Si estamos en Render → host 0.0.0.0
+    # Si estamos en tu PC → host 127.0.0.1
+    host = "0.0.0.0" if os.getenv("PORT") else "127.0.0.1"
+
+    print(f"Arrancando en {host}:{port}")
+    uvicorn.run("main:app", host=host, port=port, reload=True)

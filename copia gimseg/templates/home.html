@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Usuarios registrados</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeIn { animation: fadeIn .4s ease-out; }
+  </style>
+</head>
+
+<body class="flex items-center justify-center min-h-screen text-white">
+
+  <div class="bg-slate-800/80 backdrop-blur-lg p-8 rounded-2xl shadow-2xl 
+              w-full max-w-xl border border-slate-700 animate-fadeIn">
+
+    <h1 class="text-3xl font-bold text-center mb-6">Usuarios registrados 👥</h1>
+
+    {% if usuarios %}
+      <div class="space-y-4">
+
+        {% for u in usuarios %}
+          <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-700 shadow flex justify-between items-center">
+
+            <!-- INFO -->
+            <div>
+              <p class="text-xl font-semibold">{{ u.nombre }}</p>
+              <p class="text-slate-300 text-sm">ID: {{ u.id }}</p>
+              <p class="text-slate-300 text-sm">Objetivo: {{ u.objetivo }}</p>
+            </div>
+
+            <!-- BOTONES -->
+            <div class="flex gap-3 items-center">
+
+              <a href="/dashboard/{{ u.id }}"
+                 class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-semibold
+                        transition active:scale-95 shadow-lg shadow-blue-900/40">
+                Entrar →
+              </a>
+
+              <a href="/usuario/editar/{{ u.id }}"
+                 class="bg-yellow-500 hover:bg-yellow-600 px-3 py-2 rounded-lg font-semibold
+                        transition active:scale-95 shadow-lg shadow-yellow-900/40">
+                ✏️
+              </a>
+
+              <a href="/borrar_usuario/{{ u.id }}"
+                 onclick="return confirm('¿Seguro que quieres borrar este usuario?');"
+                 class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-semibold 
+                        transition active:scale-95 shadow-lg shadow-red-900/40">
+                🗑
+              </a>
+
+            </div>
+
+          </div>
+        {% endfor %}
+
+      </div>
+
+    {% else %}
+      <p class="text-center text-slate-300 mb-6">Aún no hay usuarios registrados.</p>
+    {% endif %}
+
+    <!-- BOTÓN CREAR NUEVO -->
+    <div class="text-center mt-6">
+      <a href="/nuevo"
+         class="bg-green-600 hover:bg-green-700 px-6 py-3 rounded-xl font-semibold
+                transition active:scale-95 shadow-lg shadow-green-900/40">
+        + Crear nuevo usuario
+      </a>
+    </div>
+
+  </div>
+
+</body>
+</html>

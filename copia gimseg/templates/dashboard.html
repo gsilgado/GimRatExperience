@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    .card { background: rgba(30,41,59,.7); border: 1px solid #334155; }
+    .badge { padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+    .badge-green { background: #064e3b; color: #a7f3d0; }
+    .badge-slate { background: #0f172a; color: #e2e8f0; }
+    .badge-amber { background: #78350f; color: #fde68a; }
+  </style>
+</head>
+
+<body class="p-6 text-white font-sans">
+
+  <!-- HEADER -->
+  <header class="mb-8 flex items-center justify-between">
+    <a href="/" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg font-semibold shadow active:scale-95">
+      🏠 Inicio
+    </a>
+
+    <div class="text-right">
+      <h1 class="text-3xl font-bold">Hola, {{ nombre }} 👋</h1>
+
+      <p class="text-slate-300">
+        Objetivo: <b class="text-white">{{ objetivo }}</b> ·
+        Nivel: <b class="text-white">{{ experiencia }}</b>
+      </p>
+
+      <p class="text-slate-300">
+        Actividad: <b class="text-white">{{ actividad }}</b>
+      </p>
+
+      <p class="text-slate-400 text-sm mt-1">
+        ID: {{ id }} · Creado: {{ creado }}
+      </p>
+    </div>
+  </header>
+
+  <!-- SELECTOR DE DÍA -->
+  <form action="/dashboard/{{ id }}" method="get" class="mb-6">
+    <div class="flex items-center gap-3">
+      <input type="date" name="dia" value="{{ dia }}"
+             class="bg-slate-800 border border-slate-600 rounded p-2 text-white">
+      <button class="bg-slate-700 hover:bg-slate-600 rounded px-3 py-2 active:scale-95">
+        Ir
+      </button>
+    </div>
+  </form>
+
+  <!-- ESTADO DEL DÍA -->
+  <section class="card rounded-xl p-4 mb-6">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+
+      <div>
+        <h2 class="text-xl font-semibold mb-1">📅 Estado del día:
+          {% if es_on %}
+            <span class="badge badge-green">🔥 ON</span>
+          {% else %}
+            <span class="badge badge-slate">🌙 OFF</span>
+          {% endif %}
+        </h2>
+
+        <p class="text-slate-300 text-sm">
+          Modo:
+          {% if estado_override is none %}
+            <b class="text-white">Automático</b> (según entreno registrado en {{ dia }})
+          {% elif estado_override %}
+            <b class="text-white">Forzado a ON</b>
+          {% else %}
+            <b class="text-white">Forzado a OFF</b>
+          {% endif %}
+        </p>
+
+        <p class="text-slate-300 text-sm mt-1">
+          Intensidad del día:
+          <span class="badge badge-amber">{{ intensidad_dia|capitalize }}</span>
+        </p>
+      </div>
+
+      <!-- Controles ON/OFF -->
+      <div class="flex items-center gap-2">
+        <form action="/estado-dia/override" method="post">
+          <input type="hidden" name="user_id" value="{{ id }}">
+          <input type="hidden" name="fecha" value="{{ dia }}">
+          <input type="hidden" name="modo" value="on">
+          <button class="bg-green-700 hover:bg-green-600 px-3 py-2 rounded-lg font-semibold active:scale-95">
+            Marcar día ON 🔥
+          </button>
+        </form>
+
+        <form action="/estado-dia/override" method="post">
+          <input type="hidden" name="user_id" value="{{ id }}">
+          <input type="hidden" name="fecha" value="{{ dia }}">
+          <input type="hidden" name="modo" value="off">
+          <button class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg font-semibold active:scale-95">
+            Marcar día OFF 🌙
+          </button>
+        </form>
+
+        <form action="/estado-dia/override" method="post">
+          <input type="hidden" name="user_id" value="{{ id }}">
+          <input type="hidden" name="fecha" value="{{ dia }}">
+          <input type="hidden" name="modo" value="auto">
+          <button class="bg-amber-600 hover:bg-amber-500 px-3 py-2 rounded-lg font-semibold active:scale-95">
+            Auto ⚙️
+          </button>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- Intensidad -->
+    <form action="/estado-dia/intensidad" method="post" class="mt-4">
+      <input type="hidden" name="user_id" value="{{ id }}">
+      <input type="hidden" name="fecha" value="{{ dia }}">
+      <div class="flex items-center gap-2">
+        <label class="text-slate-300 text-sm">Intensidad:</label>
+        <select name="intensidad" class="bg-slate-800 border border-slate-600 rounded p-2 text-white">
+          <option value="ligera"   {% if intensidad_dia == "ligera" %}selected{% endif %}>Ligera (~150 kcal)</option>
+          <option value="moderada" {% if intensidad_dia == "moderada" %}selected{% endif %}>Moderada (~250 kcal)</option>
+          <option value="intensa"  {% if intensidad_dia == "intensa" %}selected{% endif %}>Intensa (~400 kcal)</option>
+        </select>
+        <button class="bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg font-semibold active:scale-95">
+          Guardar
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- GRID PRINCIPAL -->
+  <section class="grid md:grid-cols-3 gap-4">
+
+    <!-- PLAN ON -->
+    <div class="card p-5 rounded-xl shadow-xl">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-xl font-semibold">🔥 Plan día ON</h2>
+        {% if es_on %}<span class="badge badge-green">Hoy</span>{% endif %}
+      </div>
+
+      <ul class="text-slate-300 space-y-1">
+        <li>Calorías: <b class="text-white">{{ plan_on.calorias }}</b> kcal</li>
+        <li>Proteínas: <b class="text-white">{{ plan_on.proteinas_g }}</b> g</li>
+        <li>Carbos: <b class="text-white">{{ plan_on.carbohidratos_g }}</b> g</li>
+        <li>Grasas: <b class="text-white">{{ plan_on.grasas_g }}</b> g</li>
+      </ul>
+    </div>
+
+    <!-- PLAN OFF -->
+    <div class="card p-5 rounded-xl shadow-xl">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-xl font-semibold">🌙 Plan día OFF</h2>
+        {% if not es_on %}<span class="badge badge-slate">Hoy</span>{% endif %}
+      </div>
+
+      <ul class="text-slate-300 space-y-1">
+        <li>Calorías: <b class="text-white">{{ plan_off.calorias }}</b> kcal</li>
+        <li>Proteínas: <b class="text-white">{{ plan_off.proteinas_g }}</b> g</li>
+        <li>Carbos: <b class="text-white">{{ plan_off.carbohidratos_g }}</b> g</li>
+        <li>Grasas: <b class="text-white">{{ plan_off.grasas_g }}</b> g</li>
+      </ul>
+    </div>
+
+        <!-- COMIDAS -->
+    <div class="card p-5 rounded-xl shadow-xl">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold">🍽️ Comidas</h2>
+        <a href="/comidas/{{ id }}?dia={{ dia }}" class="text-blue-400 hover:text-blue-300 font-semibold">
+          Añadir
+        </a>
+      </div>
+
+      <ul class="text-slate-300 space-y-1">
+        <li>Calorías: <b class="text-white">{{ "%.0f"|format(consumo.kcal) }}</b> kcal</li>
+        <li>Proteína: <b class="text-white">{{ "%.0f"|format(consumo.prot) }}</b> g</li>
+        <li>Carbos: <b class="text-white">{{ "%.0f"|format(consumo.carb) }}</b> g</li>
+        <li>Grasas: <b class="text-white">{{ "%.0f"|format(consumo.grasa) }}</b> g</li>
+      </ul>
+    </div>
+
+    <!-- ENTRENAMIENTO AUTOMÁTICO -->
+    <div class="card p-5 rounded-xl shadow-xl">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold">🏋️ Entreno del día</h2>
+        <a href="/entrenos/{{ id }}?dia={{ dia }}" class="text-blue-400 hover:text-blue-300 font-semibold">
+          Ver completo →
+        </a>
+      </div>
+
+      {% if plan_entreno.es_on %}
+        <p class="text-slate-300 mb-2">
+          Día <b class="text-white">ON</b> — Sesión: <b class="text-white">{{ plan_entreno.etiqueta }}</b>
+          ({{ plan_entreno.split|upper }})
+        </p>
+      {% else %}
+        <p class="text-slate-300 mb-2">
+          Día <b class="text-white">OFF</b> — Recuperación activa
+        </p>
+      {% endif %}
+
+      <ul class="text-slate-300 space-y-1 mt-2">
+        {% for e in plan_entreno.ejercicios[:3] %}
+          <li>
+            <b class="text-white">{{ e.nombre }}</b> — {{ e.series }}×{{ e.reps }}
+          </li>
+        {% endfor %}
+      </ul>
+
+      {% if plan_entreno.ejercicios|length > 3 %}
+        <p class="text-slate-500 mt-2 text-sm">…y más ejercicios</p>
+      {% endif %}
+    </div>
+
+    <!-- SEGUIMIENTO COMPLETO -->
+<div class="card p-5 rounded-xl shadow-xl">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-xl font-semibold">📊 Seguimiento</h2>
+  <a href="/seguimiento/{{ id }}" class="text-blue-400 hover:text-blue-300 font-semibold">
+  Registrar
+</a>
+  </div>
+
+  {% if historial and historial|length > 0 %}
+    <ul class="text-slate-300 space-y-3">
+      {% for m in historial %}
+
+        <li class="border-b border-slate-700 pb-3">
+
+          <p class="text-white font-bold text-lg">{{ m.fecha }}</p>
+
+          {% if m.peso %}
+            <p>🏋️ Peso: <b class="text-white">{{ m.peso }} kg</b></p>
+          {% endif %}
+
+          {% if m.pecho %}
+            <p>Pecho: <b class="text-white">{{ m.pecho }} cm</b></p>
+          {% endif %}
+          {% if m.cintura %}
+            <p>Cintura: <b class="text-white">{{ m.cintura }} cm</b></p>
+          {% endif %}
+          {% if m.abdomen %}
+            <p>Abdomen: <b class="text-white">{{ m.abdomen }} cm</b></p>
+          {% endif %}
+          {% if m.cadera %}
+            <p>Cadera: <b class="text-white">{{ m.cadera }} cm</b></p>
+          {% endif %}
+          {% if m.brazo %}
+            <p>Brazo: <b class="text-white">{{ m.brazo }} cm</b></p>
+          {% endif %}
+          {% if m.pierna %}
+            <p>Pierna: <b class="text-white">{{ m.pierna }} cm</b></p>
+          {% endif %}
+
+          <a href="/seguimiento/borrar/{{ id }}/{{ m.fecha }}" class="text-red-400 hover:text-red-300 font-semibold">
+  	  🗑️ Borrar medición
+	  </a>
+
+        </li>
+
+      {% endfor %}
+    </ul>
+
+  {% else %}
+    <p class="text-slate-300">Aún no tienes mediciones registradas.</p>
+  {% endif %}
+</div>
+
+<!-- CONTROLES PLAN -->
+    <div class="card p-5 rounded-xl shadow-xl">
+      <h2 class="text-xl font-semibold mb-3">⚙️ Ajustes</h2>
+
+      <!-- OBJETIVO -->
+      <form action="/usuario/cambiar_objetivo" method="post" class="mb-4">
+        <input type="hidden" name="user_id" value="{{ id }}">
+        <label class="block text-sm text-slate-300 mb-1">Objetivo</label>
+        <select name="objetivo" class="bg-slate-800 border border-slate-600 rounded p-2 text-white w-full mb-2">
+          <option value="perder_grasa"   {% if objetivo_code == "perder_grasa" %}selected{% endif %}>Perder grasa</option>
+          <option value="ganar_musculo"  {% if objetivo_code == "ganar_musculo" %}selected{% endif %}>Ganar músculo</option>
+          <option value="recomposicion"  {% if objetivo_code == "recomposicion" %}selected{% endif %}>Recomposición</option>
+          <option value="salud_general"  {% if objetivo_code == "salud_general" %}selected{% endif %}>Salud general</option>
+        </select>
+        <button class="w-full bg-yellow-600 hover:bg-yellow-700 px-3 py-2 rounded-lg font-semibold">
+          Actualizar 🔄
+        </button>
+      </form>
+
+      <!-- DÍAS ENTRENOS -->
+      <form action="/usuario/cambiar_dias_entreno" method="post">
+        <input type="hidden" name="user_id" value="{{ id }}">
+        <label class="block text-sm text-slate-300 mb-1">Días de entreno / semana</label>
+        <select name="dias_entreno" class="bg-slate-800 border border-slate-600 rounded p-2 text-white w-full mb-2">
+          {% for i in range(0,8) %}
+            <option value="{{ i }}" {% if dias_entreno == i %}selected{% endif %}>{{ i }}</option>
+          {% endfor %}
+        </select>
+        <button class="w-full bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg font-semibold">
+          Guardar 📅
+        </button>
+      </form>
+    </div>
+  </section>
+
+</body>
+</html>

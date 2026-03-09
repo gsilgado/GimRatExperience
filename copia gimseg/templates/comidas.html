@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Comidas</title>
+
+  <!-- Tailwind (CDN oficial) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body { background: linear-gradient(135deg,#0f172a,#1e293b); }
+    .fade { animation: fadeIn .35s ease-out; }
+    @keyframes fadeIn { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+
+    .mini-label { display:flex; flex-direction:column; gap:.25rem; font-size:.85rem; color:#cbd5e1; margin-bottom:.75rem; }
+    .mini-input { color:#e2e8f0; }
+
+    .input-with-unit { position:relative; }
+    .input-with-unit .unit {
+      position:absolute; right:.6rem; top:50%; transform:translateY(-50%);
+      font-size:.75rem; color:#94a3b8; pointer-events:none;
+    }
+
+    /* Chips de recientes */
+    .chip { display:inline-flex; align-items:center; padding:.3rem .6rem;
+            border-radius:999px; background:rgba(30,41,59,.8);
+            border:1px solid #334155; font-size:.8rem; color:#ffd166; cursor:pointer; }
+    .chip:hover { background:rgba(30,41,59,.95); }
+
+    /* Contenedor de resultados (desplegable simple) */
+    #resultados button { display:block; width:100%; text-align:left; }
+  </style>
+</head>
+
+<body class="text-white p-6 font-sans">
+
+<div class="max-w-6xl mx-auto fade">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-3xl font-bold">🍽️ Comidas de {{ user.nombre }}</h1>
+      <p class="text-slate-300">Día: <b>{{ dia }}</b> · Estado:
+        {% if es_on %}
+          <span class="text-emerald-300 font-semibold">ON</span>
+        {% else %}
+          <span class="text-slate-300 font-semibold">OFF</span>
+        {% endif %}
+      </p>
+    </div>
+
+    <a href="/dashboard/{{ user.id }}?dia={{ dia }}" class="underline text-slate-300 hover:text-white">⟵ Volver</a>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-6">
+
+    <!-- AÑADIR COMIDA -->
+    <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700 shadow-xl backdrop-blur">
+      <h2 class="text-xl font-bold mb-4">Añadir comida</h2>
+
+      <!-- SOLO Recientes -->
+      {% if recientes %}
+      <div class="mb-3">
+        <div class="flex items-center gap-2 flex-wrap" id="recientes">
+          <span class="text-slate-300 text-sm">🕓 Recientes:</span>
+          {% for r in recientes %}
+            <span class="chip select-recent"
+                  data-name="{{ r.name|e }}"
+                  data-kcal="{{ '%.1f'|format(r.kcal|default(0)) }}"
+                  data-prot="{{ '%.1f'|format(r.protein|default(0)) }}"
+                  data-carb="{{ '%.1f'|format(r.carb|default(0)) }}"
+                  data-fat ="{{ '%.1f'|format(r.fat|default(0)) }}">
+              {{ r.name }}
+            </span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Buscador -->
+      <label class="text-slate-300 text-sm">Buscar alimento</label>
+      <input id="buscador"
+             type="text"
+             placeholder="Ej: pollo, arroz, manzana..."
+             oninput="buscar_food_debounced(this.value)"
+             autocomplete="off"
+             class="w-full bg-slate-700 rounded-lg p-3 border border-slate-600 text-white mb-2"/>
+      <div id="resultados" class="space-y-1 mb-4"></div>
+
+      <!-- Form principal (¡ojo: form real!) -->
+      <form action="/comidas/add" method="post" id="formAdd">
+        <input type="hidden" name="user_id" value="{{ user.id }}">
+
+        <label class="text-slate-300 text-sm">Fecha</label>
+        <input type="date" name="fecha" value="{{ dia }}" required
+               class="w-full bg-slate-700 rounded-lg p-3 border border-slate-600 text-white mb-3"/>
+
+        <label class="text-slate-300 text-sm">Nombre</label>
+        <input type="text" name="nombre" id="nombre" required
+               placeholder="Ej: Pechuga de pollo asada"
+               class="w-full bg-slate-700 rounded-lg p-3 border border-slate-600 text-white mb-3"/>
+
+        <!-- Modo de ración -->
+        <div class="mb-3">
+          <div class="text-slate-300 text-sm mb-1">Modo de ración</div>
+          <div class="flex items-center gap-4 text-sm">
+            <label class="flex items-center gap-2">
+              <input type="radio" name="modo" value="100g" checked onchange="toggleRacion()">
+              100 g
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="radio" name="modo" value="racion" onchange="toggleRacion()">
+              Ración (g)
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="radio" name="modo" value="ml" onchange="toggleRacion()">
+              Volumen (ml)
+            </label>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">
+            En modo <b>ml</b> se asume densidad 1 g/ml (café, leche, agua). Puedes ajustar el volumen.
+          </p>
+        </div>
+
+        <!-- Cantidad -->
+        <label class="text-slate-300 text-sm">Cantidad (nº raciones)</label>
+        <input type="number" name="cantidad" id="cantidad" min="0.1" step="0.1" value="1.0"
+               oninput="recalcMacros()"
+               class="w-full bg-slate-700 rounded-lg p-3 border border-slate-600 text-white mb-3"/>
+
+        <!-- Campos según modo -->
+        <div id="bloque-100g" class="mb-3">
+          <label class="text-slate-300 text-sm">Peso por ración (g)</label>
+          <input name="peso_g" id="peso_g" type="number" min="0.1" step="0.1" value="100.0"
+                 oninput="recalcMacros()"
+                 class="w-full bg-slate-700 rounded-lg p-3 border border-slate-600 text-white"/>
+        </div>
+
+        <div id="bloque-racion" class="mb-3 hidden">
+          <label class="text-slate-300 text-sm">Peso de 1 ración (g)</label>
+          <input name="peso_racion_g" id="peso_racion_g" type="number" min="0.1" step="0.1" value="100.0"
+                 oninput="recalcMacros()"
+                 class="w-full bg-slate-700 rounded-lg p-3 border border-slate-600 text-white"/>
+        </div>
+
+        <div id="bloque-ml" class="mb-3 hidden">
+          <label class="text-slate-300 text-sm">Volumen (ml) por ración</label>
+          <input name="volumen_ml" id="volumen_ml" type="number" min="0.1" step="0.1" value="250.0"
+                 oninput="recalcMacros()"
+                 class="w-full bg-slate-700 rounded-lg p-3 border border-slate-600 text-white"/>
+        </div>
+
+        <!-- Ocultos ref/100g -->
+        <input type="hidden" name="ref_kcal_100"  id="ref_kcal_100">
+        <input type="hidden" name="ref_prot_100"  id="ref_prot_100">
+        <input type="hidden" name="ref_carb_100"  id="ref_carb_100">
+        <input type="hidden" name="ref_grasa_100" id="ref_grasa_100">
+
+        <!-- Macros calculados (finales) -->
+        <div class="grid grid-cols-4 gap-3 mt-3">
+          <div>
+            <label class="text-slate-300 text-sm">Kcal</label>
+            <input name="kcal" type="number" step="0.1" value="0.0"
+                   class="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg">
+          </div>
+          <div>
+            <label class="text-slate-300 text-sm">Prot</label>
+            <input name="prot" type="number" step="0.1" value="0.0"
+                   class="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg">
+          </div>
+          <div>
+            <label class="text-slate-300 text-sm">Carb</label>
+            <input name="carb" type="number" step="0.1" value="0.0"
+                   class="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg">
+          </div>
+          <div>
+            <label class="text-slate-300 text-sm">Grasa</label>
+            <input name="grasa" type="number" step="0.1" value="0.0"
+                   class="w-full p-3 bg-slate-700 border border-slate-600 rounded-lg">
+          </div>
+        </div>
+
+        <div class="mt-4">
+	<label class="flex items-center gap-2 text-sm text-slate-300 mt-3">
+  <input type="checkbox" name="guardar_personal">
+  Guardar este alimento (por 100 g/ml) en mis “alimentos personales”
+</label>
+          <button class="w-full bg-green-600 hover:bg-green-700 py-3 rounded-xl font-semibold shadow-lg">
+            Guardar comida ✔
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- LISTADO -->
+    <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700 shadow-xl backdrop-blur">
+
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold">Listado del día</h2>
+
+        {% if plan_ref %}
+        <span class="text-slate-300 text-sm">
+          Plan ref:
+          <b>{{ plan_ref.calorias }} kcal</b> ·
+          <b>{{ plan_ref.proteinas_g }}P</b> /
+          <b>{{ plan_ref.carbohidratos_g }}C</b> /
+          <b>{{ plan_ref.grasas_g }}G</b>
+        </span>
+        {% endif %}
+      </div>
+
+      {% if consumo['items'] %}
+      <ul class="space-y-3">
+        {% for c in consumo['items'] %}
+        <li class="bg-slate-900/70 p-4 rounded-xl border border-slate-700">
+          <div class="flex justify-between items-start gap-3">
+
+            <div>
+              <div class="text-lg font-semibold">{{ c.nombre }}</div>
+              <div class="text-slate-400 text-sm">
+                {{ '%.1f'|format(c.kcal|default(0)) }} kcal ·
+                {{ '%.1f'|format(c.prot|default(0)) }} g P ·
+                {{ '%.1f'|format(c.carb|default(0)) }} g C ·
+                {{ '%.1f'|format(c.grasa|default(0)) }} g G ·
+                Cant: {{ '%.1f'|format(c.cantidad|default(1)) }}×
+                {% if c.peso_g is defined %} · {{ '%.1f'|format(c.peso_g|default(0)) }} g/ración{% endif %}
+              </div>
+            </div>
+
+            <div class="flex gap-2">
+
+              <!-- EDITAR -->
+              <details>
+                <summary class="cursor-pointer text-blue-300 hover:text-blue-200 text-sm">✏️ Editar</summary>
+                <div class="mt-3 p-3 bg-slate-900/70 rounded-xl border border-slate-700">
+                  <form action="/comidas/edit" method="post">
+                    <input type="hidden" name="user_id" value="{{ user.id }}">
+                    <input type="hidden" name="fecha" value="{{ dia }}">
+                    <input type="hidden" name="idx"   value="{{ loop.index0 }}">
+
+                    <label class="mini-label">Nombre
+                      <input type="text" name="nombre" value="{{ c.nombre }}"
+                             class="mini-input w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm">
+                    </label>
+
+                    <label class="mini-label">Kcal
+                      <div class="input-with-unit">
+                        <input type="number" name="kcal" step="0.1" min="0"
+                               value="{{ '%.1f'|format(c.kcal|default(0)) }}"
+                               class="mini-input w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm pr-8">
+                        <span class="unit">kcal</span>
+                      </div>
+                    </label>
+
+                    <label class="mini-label">Proteína
+                      <div class="input-with-unit">
+                        <input type="number" name="prot" step="0.1" min="0"
+                               value="{{ '%.1f'|format(c.prot|default(0)) }}"
+                               class="mini-input w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm pr-8">
+                        <span class="unit">g</span>
+                      </div>
+                    </label>
+
+                    <label class="mini-label">Carbohidratos
+                      <div class="input-with-unit">
+                        <input type="number" name="carb" step="0.1" min="0"
+                               value="{{ '%.1f'|format(c.carb|default(0)) }}"
+                               class="mini-input w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm pr-8">
+                        <span class="unit">g</span>
+                      </div>
+                    </label>
+
+                    <label class="mini-label">Grasas
+                      <div class="input-with-unit">
+                        <input type="number" name="grasa" step="0.1" min="0"
+                               value="{{ '%.1f'|format(c.grasa|default(0)) }}"
+                               class="mini-input w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm pr-8">
+                        <span class="unit">g</span>
+                      </div>
+                    </label>
+
+                    <label class="mini-label">Cantidad (raciones)
+                      <div class="input-with-unit">
+                        <input type="number" name="cantidad" step="0.1" min="0.1"
+                               value="{{ '%.1f'|format(c.cantidad|default(1)) }}"
+                               class="mini-input w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm pr-8">
+                        <span class="unit">×</span>
+                      </div>
+                    </label>
+
+                    <label class="mini-label">Peso por ración (g)
+                      <div class="input-with-unit">
+                        <input type="number" name="peso_g" step="0.1" min="0.1"
+                               value="{{ '%.1f'|format(c.peso_g|default(100)) }}"
+                               class="mini-input w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm pr-8">
+                        <span class="unit">g</span>
+                      </div>
+                    </label>
+
+                    <button class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-semibold">
+                      Guardar
+                    </button>
+                  </form>
+                </div>
+              </details>
+
+              <!-- BORRAR -->
+              <form action="/comidas/delete" method="post" onsubmit="return confirm('¿Borrar {{ c.nombre }}?');">
+                <input type="hidden" name="user_id" value="{{ user.id }}">
+                <input type="hidden" name="fecha"   value="{{ dia }}">
+                <input type="hidden" name="idx"     value="{{ loop.index0 }}">
+                <button class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm font-semibold">🗑</button>
+              </form>
+
+            </div>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <p class="text-slate-400">No hay comidas registradas este día.</p>
+      {% endif %}
+
+      <!-- TOTALES -->
+      <div class="mt-6 text-slate-300 space-y-1">
+        <p><b class="text-white">Total kcal:</b> {{ '%.1f'|format(consumo.kcal|default(0)) }} kcal</p>
+        <p><b class="text-white">Proteína:</b> {{ '%.1f'|format(consumo.prot|default(0)) }} g</p>
+        <p><b class="text-white">Carbohidratos:</b> {{ '%.1f'|format(consumo.carb|default(0)) }} g</p>
+        <p><b class="text-white">Grasas:</b> {{ '%.1f'|format(consumo.grasa|default(0)) }} g</p>
+      </div>
+
+      {% if plan_ref %}
+      <!-- Barras de progreso -->
+      <div class="mt-4 space-y-4">
+
+        {% macro barra(nombre, pct, color) %}
+        <div>
+          <div class="flex justify-between text-xs text-slate-400 mb-1">
+            <span>{{ nombre }}</span>
+            <span>{{ '%.1f'|format(pct|default(0)) }}%</span>
+          </div>
+          <div class="w-full h-2 bg-slate-700 rounded">
+            <div class="h-2 rounded {{ color }}"
+                 style="width: {{ 0 if pct < 0 else (100 if pct > 100 else pct) }}%">
+            </div>
+          </div>
+        </div>
+        {% endmacro %}
+
+        {{ barra("Kcal", pct.kcal_pct, "bg-emerald-500") }}
+        {{ barra("Proteína", pct.prot_pct, "bg-sky-500") }}
+        {{ barra("Carbohidratos", pct.carb_pct, "bg-amber-500") }}
+        {{ barra("Grasas", pct.grasa_pct, "bg-pink-500") }}
+
+      </div>
+      {% endif %}
+
+    </div>
+
+  </div>
+</div>
+
+{% set personales = get_alims_personales_de(user.id) %}
+{% if personales %}
+<div class="mb-3">
+  <h3 class="text-slate-300 text-sm font-semibold mb-1">📌 Mis alimentos guardados</h3>
+
+  <div class="flex flex-wrap gap-2">
+
+    {% for a in personales %}
+    <div class="flex items-center gap-2 bg-slate-700 border border-slate-600
+                px-3 py-1 rounded-lg text-sm">
+
+      <!-- Seleccionar -->
+      <button type="button"
+              class="text-amber-300 hover:text-amber-200 font-semibold"
+              onclick="seleccionar('{{ a.name }}', {{ a.kcal }}, {{ a.protein }}, {{ a.carb }}, {{ a.fat }})">
+        {{ a.name }}
+      </button>
+
+      <!-- Editar -->
+      <details class="ml-1">
+        <summary class="cursor-pointer text-blue-300 hover:text-blue-200">✏️</summary>
+        <div class="p-2 bg-slate-800 border border-slate-600 rounded mt-2 w-64">
+
+          <form action="/alimentos_personales/edit" method="post">
+            <input type="hidden" name="user_id" value="{{ user.id }}">
+            <input type="hidden" name="nombre_original" value="{{ a.name }}">
+
+            <label class="text-xs text-slate-300">Nombre</label>
+            <input type="text" name="nombre" value="{{ a.name }}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs mb-2">
+
+            <label class="text-xs text-slate-300">Kcal (100 g)</label>
+            <input type="number" name="kcal" step="0.1" value="{{ a.kcal }}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs mb-2">
+
+            <label class="text-xs text-slate-300">Proteína</label>
+            <input type="number" name="protein" step="0.1" value="{{ a.protein }}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs mb-2">
+
+            <label class="text-xs text-slate-300">Carbohidratos</label>
+            <input type="number" name="carb" step="0.1" value="{{ a.carb }}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs mb-2">
+
+            <label class="text-xs text-slate-300">Grasas</label>
+            <input type="number" name="fat" step="0.1" value="{{ a.fat }}"
+                   class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs mb-3">
+
+            <button class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm w-full">
+              Guardar
+            </button>
+          </form>
+        </div>
+      </details>
+
+      <!-- Borrar -->
+      <form action="/alimentos_personales/delete" method="post">
+        <input type="hidden" name="user_id" value="{{ user.id }}">
+        <input type="hidden" name="nombre" value="{{ a.name }}">
+        <button class="text-red-400 hover:text-red-300">🗑</button>
+      </form>
+
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- JS BUSCADOR / CÁLCULOS / SELECCIÓN -->
+<script>
+/* ===========================
+   Debounce para evitar límite
+   =========================== */
+let _debounce_t;
+function buscar_food_debounced(q){
+  clearTimeout(_debounce_t);
+  _debounce_t = setTimeout(() => buscar_food(q), 400); // 400 ms
+}
+
+function toggleRacion(){
+  const modo = document.querySelector('input[name="modo"]:checked').value;
+  document.getElementById('bloque-100g').classList.toggle('hidden', modo !== '100g');
+  document.getElementById('bloque-racion').classList.toggle('hidden', modo !== 'racion');
+  document.getElementById('bloque-ml').classList.toggle('hidden', modo !== 'ml');
+  recalcMacros();
+}
+
+async function buscar_food(q){
+  const cont = document.getElementById("resultados");
+  if(q.length < 2){
+    cont.innerHTML = "";
+    return;
+  }
+
+  try {
+    const r = await fetch(`/alimentos/buscar?q=${encodeURIComponent(q)}&user_id={{ user.id }}`);
+    const data = await r.json();
+
+    if(!Array.isArray(data) || data.length === 0){
+      cont.innerHTML = `<div class="text-xs text-slate-400">Sin resultados</div>`;
+      return;
+    }
+
+    cont.innerHTML = data.map(f => {
+      const name = f.name || '';
+      const kcal = Number(f.kcal ?? 0);
+      const p = Number(f.protein ?? 0);
+      const c = Number(f.carb ?? 0);
+      const g = Number(f.fat ?? 0);
+      return `
+        <button type="button"
+                class="p-2 bg-slate-700 rounded hover:bg-slate-600 result-item"
+                data-name="${name.replace(/"/g, '&quot;')}"
+                data-kcal="${kcal.toFixed(1)}"
+                data-prot="${p.toFixed(1)}"
+                data-carb="${c.toFixed(1)}"
+                data-fat ="${g.toFixed(1)}">
+          ${name} — <span class="text-slate-300">${kcal.toFixed(1)} kcal</span>
+        </button>`;
+    }).join("");
+
+  } catch(e){
+    console.error(e);
+    cont.innerHTML = `<div class="text-xs text-rose-300">Error de búsqueda</div>`;
+  }
+}
+
+function seleccionar(nombre, kcal100, prot100, carb100, grasa100){
+  const nombreInput = document.getElementById("nombre");
+  if (nombreInput) {
+    nombreInput.value = nombre;
+    nombreInput.focus();
+  }
+
+  document.getElementById("ref_kcal_100").value  = kcal100 || 0;
+  document.getElementById("ref_prot_100").value  = prot100 || 0;
+  document.getElementById("ref_carb_100").value  = carb100 || 0;
+  document.getElementById("ref_grasa_100").value = grasa100 || 0;
+
+  recalcMacros();
+  document.getElementById("resultados").innerHTML = "";
+}
+
+function recalcMacros(){
+  const modo = document.querySelector('input[name="modo"]:checked').value;
+  const cant = parseFloat(document.getElementById("cantidad").value || "1");
+
+  const kcal100  = parseFloat(document.getElementById("ref_kcal_100").value  || "0");
+  const prot100  = parseFloat(document.getElementById("ref_prot_100").value  || "0");
+  const carb100  = parseFloat(document.getElementById("ref_carb_100").value  || "0");
+  const grasa100 = parseFloat(document.getElementById("ref_grasa_100").value || "0");
+
+  let factor = 0;
+  if(modo === '100g'){
+    const peso = parseFloat(document.getElementById("peso_g").value || "100");
+    factor = (peso / 100) * cant;
+  } else if(modo === 'racion'){
+    const pr = parseFloat(document.getElementById("peso_racion_g").value || "100");
+    factor = (pr / 100) * cant;
+  } else {
+    const ml = parseFloat(document.getElementById("volumen_ml").value || "250");
+    factor = (ml / 100) * cant;
+  }
+
+  if ((kcal100 + prot100 + carb100 + grasa100) > 0 && factor > 0){
+    document.querySelector("input[name='kcal']").value  = (kcal100  * factor).toFixed(1);
+    document.querySelector("input[name='prot']").value  = (prot100  * factor).toFixed(1);
+    document.querySelector("input[name='carb']").value  = (carb100  * factor).toFixed(1);
+    document.querySelector("input[name='grasa']").value = (grasa100 * factor).toFixed(1);
+  }
+}
+
+/* Delegación de eventos: Recientes + Resultados */
+document.addEventListener('DOMContentLoaded', () => {
+  toggleRacion();
+
+  // Selección desde RECIENTES
+  document.getElementById('recientes')?.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.select-recent');
+    if (btn) {
+      const nombre = btn.dataset.name;
+      const kcal   = parseFloat(btn.dataset.kcal);
+      const prot   = parseFloat(btn.dataset.prot);
+      const carb   = parseFloat(btn.dataset.carb);
+      const fat    = parseFloat(btn.dataset.fat);
+      seleccionar(nombre, kcal, prot, carb, fat);
+    }
+  });
+
+  // Selección desde RESULTADOS
+  document.getElementById('resultados')?.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.result-item');
+    if (btn) {
+      const nombre = btn.dataset.name;
+      const kcal   = parseFloat(btn.dataset.kcal);
+      const prot   = parseFloat(btn.dataset.prot);
+      const carb   = parseFloat(btn.dataset.carb);
+      const fat    = parseFloat(btn.dataset.fat);
+      seleccionar(nombre, kcal, prot, carb, fat);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
